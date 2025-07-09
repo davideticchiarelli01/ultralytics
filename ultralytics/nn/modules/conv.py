@@ -23,6 +23,7 @@ __all__ = (
     "Concat",
     "RepConv",
     "Index",
+    "SPDConv",
 )
 
 
@@ -148,7 +149,7 @@ class Conv2(Conv):
         """Fuse parallel convolutions."""
         w = torch.zeros_like(self.conv.weight.data)
         i = [x // 2 for x in w.shape[2:]]
-        w[:, :, i[0] : i[0] + 1, i[1] : i[1] + 1] = self.cv2.weight.data.clone()
+        w[:, :, i[0]: i[0] + 1, i[1]: i[1] + 1] = self.cv2.weight.data.clone()
         self.conv.weight.data += w
         self.__delattr__("cv2")
         self.forward = self.forward_fuse
@@ -711,3 +712,21 @@ class Index(nn.Module):
             (torch.Tensor): Selected tensor.
         """
         return x[self.index]
+
+
+class SPDConv(nn.Module):
+    def __init__(self, in_channels, out_channels, scale=2, kernel_size=3):
+        super().__init__()
+        self.scale = scale
+        self.space2depth = nn.PixelUnshuffle(scale)
+        self.conv = nn.Conv2d(in_channels * (scale ** 2), out_channels, kernel_size=kernel_size, stride=1,
+                              padding=kernel_size // 2)
+        self.bn = nn.BatchNorm2d(out_channels)
+        self.act = nn.SiLU()  # Sostituisci con nn.ReLU() se preferisci
+
+    def forward(self, x):
+        x = self.space2depth(x)
+        x = self.conv(x)
+        x = self.bn(x)
+        x = self.act(x)
+        return x
