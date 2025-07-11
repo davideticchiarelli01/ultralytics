@@ -54,7 +54,7 @@ __all__ = (
     "TorchVision",
     "ECA",
     "SPPCSPC",
-    "ECSPP"
+    "ECSPP",
 )
 
 
@@ -2077,7 +2077,7 @@ class ECA(nn.Module):
         return x * y.expand_as(x)
 
 
-class SPPCSPC(nn.Module):7
+class SPPCSPC(nn.Module):
     def __init__(self, c1, c2, k=(5, 9, 13), e=0.5):
         super(SPPCSPC, self).__init__()
         c_ = int(2 * c2 * e)
