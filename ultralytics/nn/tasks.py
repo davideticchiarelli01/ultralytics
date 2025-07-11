@@ -69,6 +69,9 @@ from ultralytics.nn.modules import (
     YOLOESegment,
     v10Detect,
     SPDConv,
+    ECA,
+    SPPCSPC,
+    ECSPP
 )
 from ultralytics.utils import DEFAULT_CFG_DICT, DEFAULT_CFG_KEYS, LOGGER, YAML, colorstr, emojis
 from ultralytics.utils.checks import check_requirements, check_suffix, check_yaml
@@ -1646,6 +1649,9 @@ def parse_model(d, ch, verbose=True):
             C2fCIB,
             A2C2f,
             SPDConv,
+            ECA,
+            SPPCSPC,
+            ECSPP
         }
     )
     repeat_modules = frozenset(  # modules with 'repeat' arguments

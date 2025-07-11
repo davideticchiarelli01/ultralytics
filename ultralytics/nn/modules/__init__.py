@@ -59,6 +59,9 @@ from .block import (
     ResNetLayer,
     SCDown,
     TorchVision,
+    ECA,
+    SPPCSPC,
+    ECSPP
 )
 from .conv import (
     CBAM,
@@ -181,4 +184,7 @@ __all__ = (
     "Index",
     "A2C2f",
     "SPDConv",
+    "ECA",
+    "SPPCSPC",
+    "ECSPP"
 )

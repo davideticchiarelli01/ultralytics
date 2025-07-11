@@ -52,6 +52,9 @@ __all__ = (
     "PSA",
     "SCDown",
     "TorchVision",
+    "ECA",
+    "SPPCSPC",
+    "ECSPP"
 )
 
 
@@ -151,15 +154,15 @@ class HGBlock(nn.Module):
     """
 
     def __init__(
-        self,
-        c1: int,
-        cm: int,
-        c2: int,
-        k: int = 3,
-        n: int = 6,
-        lightconv: bool = False,
-        shortcut: bool = False,
-        act: nn.Module = nn.ReLU(),
+            self,
+            c1: int,
+            cm: int,
+            c2: int,
+            k: int = 3,
+            n: int = 6,
+            lightconv: bool = False,
+            shortcut: bool = False,
+            act: nn.Module = nn.ReLU(),
     ):
         """
         Initialize HGBlock with specified parameters.
@@ -471,7 +474,7 @@ class Bottleneck(nn.Module):
     """Standard bottleneck."""
 
     def __init__(
-        self, c1: int, c2: int, shortcut: bool = True, g: int = 1, k: Tuple[int, int] = (3, 3), e: float = 0.5
+            self, c1: int, c2: int, shortcut: bool = True, g: int = 1, k: Tuple[int, int] = (3, 3), e: float = 0.5
     ):
         """
         Initialize a standard bottleneck module.
@@ -628,7 +631,7 @@ class MaxSigmoidAttnBlock(nn.Module):
 
         aw = torch.einsum("bmchw,bnmc->bmhwn", embed, guide)
         aw = aw.max(dim=-1)[0]
-        aw = aw / (self.hc**0.5)
+        aw = aw / (self.hc ** 0.5)
         aw = aw + self.bias[None, :, None, None]
         aw = aw.sigmoid() * self.scale
 
@@ -642,16 +645,16 @@ class C2fAttn(nn.Module):
     """C2f module with an additional attn module."""
 
     def __init__(
-        self,
-        c1: int,
-        c2: int,
-        n: int = 1,
-        ec: int = 128,
-        nh: int = 1,
-        gc: int = 512,
-        shortcut: bool = False,
-        g: int = 1,
-        e: float = 0.5,
+            self,
+            c1: int,
+            c2: int,
+            n: int = 1,
+            ec: int = 128,
+            nh: int = 1,
+            gc: int = 512,
+            shortcut: bool = False,
+            g: int = 1,
+            e: float = 0.5,
     ):
         """
         Initialize C2f module with attention mechanism.
@@ -711,7 +714,7 @@ class ImagePoolingAttn(nn.Module):
     """ImagePoolingAttn: Enhance the text embeddings with image-aware information."""
 
     def __init__(
-        self, ec: int = 256, ch: Tuple[int, ...] = (), ct: int = 512, nh: int = 8, k: int = 3, scale: bool = False
+            self, ec: int = 256, ch: Tuple[int, ...] = (), ct: int = 512, nh: int = 8, k: int = 3, scale: bool = False
     ):
         """
         Initialize ImagePoolingAttn module.
@@ -753,7 +756,7 @@ class ImagePoolingAttn(nn.Module):
         """
         bs = x[0].shape[0]
         assert len(x) == self.nf
-        num_patches = self.k**2
+        num_patches = self.k ** 2
         x = [pool(proj(x)).view(bs, -1, num_patches) for (x, proj, pool) in zip(x, self.projections, self.im_pools)]
         x = torch.cat(x, dim=-1).transpose(1, 2)
         q = self.query(text)
@@ -766,7 +769,7 @@ class ImagePoolingAttn(nn.Module):
         v = v.reshape(bs, -1, self.nh, self.hc)
 
         aw = torch.einsum("bnmc,bkmc->bmnk", q, k)
-        aw = aw / (self.hc**0.5)
+        aw = aw / (self.hc ** 0.5)
         aw = F.softmax(aw, dim=-1)
 
         x = torch.einsum("bmnk,bkmc->bnmc", aw, v)
@@ -856,7 +859,7 @@ class RepBottleneck(Bottleneck):
     """Rep bottleneck."""
 
     def __init__(
-        self, c1: int, c2: int, shortcut: bool = True, g: int = 1, k: Tuple[int, int] = (3, 3), e: float = 0.5
+            self, c1: int, c2: int, shortcut: bool = True, g: int = 1, k: Tuple[int, int] = (3, 3), e: float = 0.5
     ):
         """
         Initialize RepBottleneck.
@@ -1108,7 +1111,7 @@ class C3k2(C2f):
     """Faster Implementation of CSP Bottleneck with 2 convolutions."""
 
     def __init__(
-        self, c1: int, c2: int, n: int = 1, c3k: bool = False, e: float = 0.5, g: int = 1, shortcut: bool = True
+            self, c1: int, c2: int, n: int = 1, c3k: bool = False, e: float = 0.5, g: int = 1, shortcut: bool = True
     ):
         """
         Initialize C3k2 module.
@@ -1280,7 +1283,7 @@ class C2fCIB(C2f):
     """
 
     def __init__(
-        self, c1: int, c2: int, n: int = 1, shortcut: bool = False, lk: bool = False, g: int = 1, e: float = 0.5
+            self, c1: int, c2: int, n: int = 1, shortcut: bool = False, lk: bool = False, g: int = 1, e: float = 0.5
     ):
         """
         Initialize C2fCIB module.
@@ -1330,7 +1333,7 @@ class Attention(nn.Module):
         self.num_heads = num_heads
         self.head_dim = dim // num_heads
         self.key_dim = int(self.head_dim * attn_ratio)
-        self.scale = self.key_dim**-0.5
+        self.scale = self.key_dim ** -0.5
         nh_kd = self.key_dim * num_heads
         h = dim + nh_kd * 2
         self.qkv = Conv(dim, h, 1, act=False)
@@ -1639,7 +1642,7 @@ class TorchVision(nn.Module):
     """
 
     def __init__(
-        self, model: str, weights: str = "DEFAULT", unwrap: bool = True, truncate: int = 2, split: bool = False
+            self, model: str, weights: str = "DEFAULT", unwrap: bool = True, truncate: int = 2, split: bool = False
     ):
         """
         Load the model and weights from torchvision.
@@ -1754,7 +1757,7 @@ class AAttn(nn.Module):
             .permute(0, 2, 3, 1)
             .split([self.head_dim, self.head_dim, self.head_dim], dim=2)
         )
-        attn = (q.transpose(-2, -1) @ k) * (self.head_dim**-0.5)
+        attn = (q.transpose(-2, -1) @ k) * (self.head_dim ** -0.5)
         attn = attn.softmax(dim=-1)
         x = v @ attn.transpose(-2, -1)
         x = x.permute(0, 3, 1, 2)
@@ -1865,17 +1868,17 @@ class A2C2f(nn.Module):
     """
 
     def __init__(
-        self,
-        c1: int,
-        c2: int,
-        n: int = 1,
-        a2: bool = True,
-        area: int = 1,
-        residual: bool = False,
-        mlp_ratio: float = 2.0,
-        e: float = 0.5,
-        g: int = 1,
-        shortcut: bool = True,
+            self,
+            c1: int,
+            c2: int,
+            n: int = 1,
+            a2: bool = True,
+            area: int = 1,
+            residual: bool = False,
+            mlp_ratio: float = 2.0,
+            e: float = 0.5,
+            g: int = 1,
+            shortcut: bool = True,
     ):
         """
         Initialize Area-Attention C2f module.
@@ -2031,3 +2034,80 @@ class SAVPE(nn.Module):
         aggregated = score.transpose(-2, -3) @ x.reshape(B, self.c, C // self.c, -1).transpose(-1, -2)
 
         return F.normalize(aggregated.transpose(-2, -3).reshape(B, Q, -1), dim=-1, p=2)
+
+
+class ECA(nn.Module):
+    """Constructs ECA module.
+
+    Args:
+        channel: Number of channels of the input feature map
+        k_size: Adaptive selection of kernel size
+    """
+
+    def __init__(self, channel, k_size=3):
+        super(ECA, self).__init__()
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.conv = nn.Conv1d(1, 1, kernel_size=k_size, padding=(k_size - 1) // 2, bias=False)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        # feature descriptor on the global spatial information
+        y = self.avg_pool(x)
+        # Two different branches of ECA module
+        y = self.conv(y.squeeze(-1).transpose(-1, -2)).transpose(-1, -2).unsqueeze(-1)
+        # Multi-scale information fusion
+        y = self.sigmoid(y)
+
+        return x * y.expand_as(x)
+
+
+class ECA(nn.Module):
+    """Efficient Channel Attention (ECA) Module"""
+
+    def __init__(self, channel, k_size=3):
+        super(ECA, self).__init__()
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.conv = nn.Conv1d(1, 1, kernel_size=k_size, padding=(k_size - 1) // 2, bias=False)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        y = self.avg_pool(x)
+        y = self.conv(y.squeeze(-1).transpose(-1, -2)).transpose(-1, -2).unsqueeze(-1)
+        y = self.sigmoid(y)
+        return x * y.expand_as(x)
+
+
+class SPPCSPC(nn.Module):7
+    def __init__(self, c1, c2, k=(5, 9, 13), e=0.5):
+        super(SPPCSPC, self).__init__()
+        c_ = int(2 * c2 * e)
+        self.cv1 = Conv(c1, c_, 1, 1)
+        self.cv2 = Conv(c1, c_, 1, 1)
+        self.cv3 = Conv(c_, c_, 3, 1)
+        self.cv4 = Conv(c_, c_, 1, 1)
+        self.m = nn.ModuleList([nn.MaxPool2d(kernel_size=x, stride=1, padding=x // 2) for x in k])
+        self.cv5 = Conv(4 * c_, c_, 1, 1)
+        self.cv6 = Conv(c_, c_, 3, 1)
+        self.cv7 = Conv(2 * c_, c2, 1, 1)
+
+    def forward(self, x):
+        x1 = self.cv4(self.cv3(self.cv1(x)))
+        y1 = self.cv6(self.cv5(torch.cat([x1] + [m(x1) for m in self.m], 1)))
+        y2 = self.cv2(x)
+        return self.cv7(torch.cat((y1, y2), dim=1))
+
+
+class ECSPP(nn.Module):
+    """
+    ECSPP = ECA-Net (attenzione canale) + SPPCSPC (piramide pooling CSP)
+    """
+
+    def __init__(self, c1, c2, k_size_eca=3, k_spp=(5, 9, 13), e=0.5):
+        super(ECSPP, self).__init__()
+        self.eca = ECA(c1, k_size_eca)
+        self.sppcspc = SPPCSPC(c1, c2, k=k_spp, e=e)
+
+    def forward(self, x):
+        x = self.eca(x)
+        x = self.sppcspc(x)
+        return x

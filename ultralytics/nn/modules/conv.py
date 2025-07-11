@@ -722,7 +722,7 @@ class SPDConv(nn.Module):
         self.conv = nn.Conv2d(in_channels * (scale ** 2), out_channels, kernel_size=kernel_size, stride=1,
                               padding=kernel_size // 2)
         self.bn = nn.BatchNorm2d(out_channels)
-        self.act = nn.SiLU()  # Sostituisci con nn.ReLU() se preferisci
+        self.act = nn.SiLU()
 
     def forward(self, x):
         x = self.space2depth(x)
