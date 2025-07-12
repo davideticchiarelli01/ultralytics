@@ -61,7 +61,10 @@ from .block import (
     TorchVision,
     ECA,
     SPPCSPC,
-    ECSPP
+    ECSPP,
+    LSKblockDeformable,
+    DL_Bottleneck,
+    DL_C2f,
 )
 from .conv import (
     CBAM,
@@ -186,5 +189,8 @@ __all__ = (
     "SPDConv",
     "ECA",
     "SPPCSPC",
-    "ECSPP"
+    "ECSPP",
+    "LSKblockDeformable",
+    "DL_Bottleneck",
+    "DL_C2f",
 )

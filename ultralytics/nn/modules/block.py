@@ -6,6 +6,7 @@ from typing import List, Optional, Tuple
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torchvision.ops import DeformConv2d
 
 from ultralytics.utils.torch_utils import fuse_conv_and_bn
 
@@ -55,6 +56,9 @@ __all__ = (
     "ECA",
     "SPPCSPC",
     "ECSPP",
+    "LSKblockDeformable",
+    "DL_Bottleneck",
+    "DL_C2f",
 )
 
 
@@ -2043,6 +2047,7 @@ class ECA(nn.Module):
         channel: Number of channels of the input feature map
         k_size: Adaptive selection of kernel size
     """
+
     def __init__(self, channel, k_size=3):
         super(ECA, self).__init__()
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
@@ -2057,6 +2062,7 @@ class ECA(nn.Module):
         # Multi-scale information fusion
         y = self.sigmoid(y)
         return x * y.expand_as(x)
+
 
 class SPPCSPC(nn.Module):
     def __init__(self, c1, c2, k=(5, 9, 13), e=0.5):
@@ -2092,3 +2098,108 @@ class ECSPP(nn.Module):
         x = self.eca(x)
         x = self.sppcspc(x)
         return x
+
+
+class LSKblockDeformable(nn.Module):
+    def __init__(self, dim):
+        super().__init__()
+        self.dim = dim
+
+        # Deformable conv: dim input -> dim output, kernel=3
+        self.offset_conv = nn.Conv2d(dim, 18, kernel_size=3, padding=1)
+        self.deform_conv = DeformConv2d(dim, dim, kernel_size=3, padding=1)
+
+        self.conv0 = nn.Conv2d(dim, dim, 5, padding=2, groups=dim)
+        self.conv_spatial = nn.Conv2d(dim, dim, 7, stride=1, padding=9, groups=dim, dilation=3)
+        self.conv1 = nn.Conv2d(dim, dim // 2, 1)
+        self.conv2 = nn.Conv2d(dim, dim // 2, 1)
+        self.conv_squeeze = nn.Conv2d(2, 2, 7, padding=3)
+        self.conv = nn.Conv2d(dim // 2, dim, 1)
+
+    def forward(self, x):
+        # Deformable conv branch
+        offset = self.offset_conv(x)
+        x_deform = self.deform_conv(x, offset)
+
+        # Large Kernel conv branches
+        attn1 = self.conv0(x)
+        attn2 = self.conv_spatial(attn1)
+
+        attn1 = self.conv1(attn1)
+        attn2 = self.conv2(attn2)
+
+        attn = torch.cat([attn1, attn2], dim=1)
+        avg_attn = torch.mean(attn, dim=1, keepdim=True)
+        max_attn, _ = torch.max(attn, dim=1, keepdim=True)
+        agg = torch.cat([avg_attn, max_attn], dim=1)
+
+        sig = self.conv_squeeze(agg).sigmoid()
+        attn = attn1 * sig[:, 0:1, :, :] + attn2 * sig[:, 1:2, :, :]
+        attn = self.conv(attn)
+
+        # Element-wise multiplication with deformable conv output
+        y = x_deform * attn
+        return y
+
+
+class DL_Bottleneck(nn.Module):
+    """Standard bottleneck."""
+
+    def __init__(
+            self, c1: int, c2: int, shortcut: bool = True, g: int = 1, k: Tuple[int, int] = (3, 3), e: float = 0.5
+    ):
+        """
+        Initialize a standard bottleneck module.
+
+        Args:
+            c1 (int): Input channels.
+            c2 (int): Output channels.
+            shortcut (bool): Whether to use shortcut connection.
+            g (int): Groups for convolutions.
+            k (tuple): Kernel sizes for convolutions.
+            e (float): Expansion ratio.
+        """
+        super().__init__()
+        c_ = int(c2 * e)  # hidden channels
+        self.cv1 = Conv(c1, c_, k[0], 1)
+        self.cv2 = LSKblockDeformable(c2)
+        self.add = shortcut and c1 == c2
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply bottleneck with optional shortcut connection."""
+        return x + self.cv2(self.cv1(x)) if self.add else self.cv2(self.cv1(x))
+
+
+class DL_C2f(nn.Module):
+    """Faster Implementation of CSP Bottleneck with 2 convolutions."""
+
+    def __init__(self, c1: int, c2: int, n: int = 1, shortcut: bool = False, g: int = 1, e: float = 0.5):
+        """
+        Initialize a CSP bottleneck with 2 convolutions.
+
+        Args:
+            c1 (int): Input channels.
+            c2 (int): Output channels.
+            n (int): Number of Bottleneck blocks.
+            shortcut (bool): Whether to use shortcut connections.
+            g (int): Groups for convolutions.
+            e (float): Expansion ratio.
+        """
+        super().__init__()
+        self.c = int(c2 * e)  # hidden channels
+        self.cv1 = Conv(c1, 2 * self.c, 1, 1)
+        self.cv2 = Conv((2 + n) * self.c, c2, 1)  # optional act=FReLU(c2)
+        self.m = nn.ModuleList(DL_Bottleneck(self.c, self.c, shortcut, g, k=((3, 3), (3, 3)), e=1.0) for _ in range(n))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass through C2f layer."""
+        y = list(self.cv1(x).chunk(2, 1))
+        y.extend(m(y[-1]) for m in self.m)
+        return self.cv2(torch.cat(y, 1))
+
+    def forward_split(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass using split() instead of chunk()."""
+        y = self.cv1(x).split((self.c, self.c), 1)
+        y = [y[0], y[1]]
+        y.extend(m(y[-1]) for m in self.m)
+        return self.cv2(torch.cat(y, 1))
