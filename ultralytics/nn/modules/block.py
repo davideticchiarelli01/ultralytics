@@ -6,7 +6,8 @@ from typing import List, Optional, Tuple
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchvision.ops import DeformConv2d
+# from torchvision.ops import DeformConv2d
+from mmcv.ops import DeformConv2dPack as DeformConv2d
 
 from ultralytics.utils.torch_utils import fuse_conv_and_bn
 
@@ -2105,7 +2106,7 @@ class LSKblockDeformable(nn.Module):
         super().__init__()
         self.dim = dim
 
-        # Deformable conv: dim input -> dim output, kernel=3
+        # Offset per deformable conv: 2 * kernel_size * kernel_size = 2*3*3 = 18
         self.offset_conv = nn.Conv2d(dim, 18, kernel_size=3, padding=1)
         self.deform_conv = DeformConv2d(dim, dim, kernel_size=3, padding=1)
 
@@ -2117,11 +2118,8 @@ class LSKblockDeformable(nn.Module):
         self.conv = nn.Conv2d(dim // 2, dim, 1)
 
     def forward(self, x):
-        # Deformable conv branch
-        offset = self.offset_conv(x)
-        x_deform = self.deform_conv(x, offset)
+        x_deform = self.deform_conv(x)
 
-        # Large Kernel conv branches
         attn1 = self.conv0(x)
         attn2 = self.conv_spatial(attn1)
 
@@ -2137,9 +2135,7 @@ class LSKblockDeformable(nn.Module):
         attn = attn1 * sig[:, 0:1, :, :] + attn2 * sig[:, 1:2, :, :]
         attn = self.conv(attn)
 
-        # Element-wise multiplication with deformable conv output
-        y = x_deform * attn
-        return y
+        return x_deform * attn
 
 
 class DL_Bottleneck(nn.Module):
